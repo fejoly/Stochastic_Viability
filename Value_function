@@ -29,11 +29,11 @@ otor_forage = 160000. #8000000 divisé par 50
 Surf_zone_ete=1800.
 
 #Paramètres du modèle de biomasse:
-rue=0.0045 #Rain use efficiency
-storage=0.73581 #Taux de mise en réserve des racines
-mortality=0.05785 #Facteur de mortalité des racines
-Conso_sheep_unit=207.7 #Consommation par sheep unit pendant les 5 mois passés sur la zone d'été (1 day = 1.385 kg of dry matter during 150 days - moyenne de 1 et 1.77)
-densdep=0.00112 #Paramètre de densité dépendance de la mortalité de biomasse souterraine et de mise en réserve
+rue=0.0045 
+storage=0.73581 
+mortality=0.05785 
+Conso_sheep_unit=207.7 
+densdep=0.00112 
 
 #Paramètres des sous-modèles démographiques animaux    
 Perc_female_bog=0.533 #parameter to be entered
