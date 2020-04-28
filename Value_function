@@ -16,7 +16,7 @@ Initial_UB=500 #used to slice the global kernel in the end
 ########################################
 #   Which viability kernel to build?   #
 ########################################
-discr_coeff=1 # coeff de discr à fixer à 1 pour avoir les simu de la thèse, <1 pour accélérer les simus
+discr_coeff=1 # 
 Comment = 'db_GitHub'
 Coef_poverty_line=2
 Threshold_bog_horizon=0
