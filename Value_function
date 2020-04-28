@@ -4,14 +4,11 @@ import matplotlib.cm as cm
 import pickle
 import os
 
-# Compared to the previous version, this script compute a stochastic kernel this a threshold limit in the end for 
-#Compared to the previous version, this version comprises a process to save only the viability kernel Capture basin on year 0
-#Compared with the previous version, this version has no capture basin parts
 
 os.chdir(r'C:\Users\fejoly\Documents\travail_sauvegarde\Publications\Herder rationality\Matrix')
 plt.close('all')
 
-Initial_UB=500 #used to slice the global kernel in the end
+Initial_UB=500 #used to slice the matrix in the end
 
 ########################################
 #   Which viability kernel to build?   #
