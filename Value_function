@@ -1,1 +1,333 @@
+import numpy
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import pickle
+import os
 
+# Compared to the previous version, this script compute a stochastic kernel this a threshold limit in the end for 
+#Compared to the previous version, this version comprises a process to save only the viability kernel Capture basin on year 0
+#Compared with the previous version, this version has no capture basin parts
+
+os.chdir(r'C:\Users\fejoly\Documents\travail_sauvegarde\Publications\Herder rationality\Matrix')
+plt.close('all')
+
+Initial_UB=500 #used to slice the global kernel in the end
+
+########################################
+#   Which viability kernel to build?   #
+########################################
+discr_coeff=1 # coeff de discr à fixer à 1 pour avoir les simu de la thèse, <1 pour accélérer les simus
+Comment = 'db_GitHub'
+Coef_poverty_line=2
+Threshold_bog_horizon=0
+Threshold_bod_horizon=0
+Threshold_biomass_horizon=0
+Horizon=20
+Year_of_viability_kernel_extraction=0#index
+file_name_save_viable_space_matrix = 'Value_function_all_t_on_' + str(Horizon) + 'years_Pov_X' + str(Coef_poverty_line) + '_Target_' + str(Threshold_bog_horizon) + '_bog_' + str(Threshold_bod_horizon) + '_bod_'+ str(Threshold_biomass_horizon) + '_kgha_'  + Comment
+file_name_save_viable_space_matrix_t0 = 'Value_function_t0_on_' + str(Horizon) + 'years_Pov_X' + str(Coef_poverty_line) + '_Target_' + str(Threshold_bog_horizon) + '_bog_' + str(Threshold_bod_horizon) + '_bod_'+ str(Threshold_biomass_horizon) + '_kgha_'  + Comment
+
+#Paramètres liés aux parcours
+otor_forage = 160000. #8000000 divisé par 50
+Surf_zone_ete=1800.
+
+#Paramètres du modèle de biomasse:
+rue=0.0045 #Rain use efficiency
+storage=0.73581 #Taux de mise en réserve des racines
+mortality=0.05785 #Facteur de mortalité des racines
+Conso_sheep_unit=207.7 #Consommation par sheep unit pendant les 5 mois passés sur la zone d'été (1 day = 1.385 kg of dry matter during 150 days - moyenne de 1 et 1.77)
+densdep=0.00112 #Paramètre de densité dépendance de la mortalité de biomasse souterraine et de mise en réserve
+
+#Paramètres des sous-modèles démographiques animaux    
+Perc_female_bog=0.533 #parameter to be entered
+Perc_female_bod=0.510 #parameter to be entered
+Age_culling_bog=7. #parameter to be entered (determined from herders interviews)
+Age_culling_bod=14. #parameter to be entered (determined from herders interviews)
+Age_first_delivery_bog=2. #parameter to be entered (determined from herders interviews)
+Age_first_delivery_bod=3. #parameter to be entered (determined from herders interviews)
+Mature_female_bog=Perc_female_bog*(Age_culling_bog-Age_first_delivery_bog)/Age_culling_bog
+Mature_female_bod=Perc_female_bod*(Age_culling_bod-Age_first_delivery_bod)/Age_culling_bod
+Slope_survival_rate_of_young_bog_per_breeding_female=63.30 #Linear regression between use factor and fecundity / Khovd statistics
+Slope_survival_rate_of_young_bod_per_breeding_female=56.33 #Linear regression between use factor and fecundity / Khovd statistics
+Intercept_survival_rate_of_young_bog_per_breeding_female=35.00 #Linear regression between use factor and fecundity / Khovd statistics
+Intercept_survival_rate_of_young_bod_per_breeding_female=17.11 #Linear regression between use factor and fecundity / Khovd statistics
+Max_survival_rate_of_young_bog_per_breeding_female=0.974 #restrains the linear regression between use factor and fecundity / Khovd statistics
+Max_survival_rate_of_young_bod_per_breeding_female=0.7436 #restrains the linear regression between use factor and fecundity / Khovd statistics
+Min_survival_rate_of_young_bog_per_breeding_female=0.3536 #restrains the linear regression between use factor and fecundity / Khovd statistics
+Min_survival_rate_of_young_bod_per_breeding_female=0.2824 #restrains the linear regression between use factor and fecundity / Khovd statistics    
+Dzud_survival_rate_of_young_bog_per_breeding_female=40.19
+Dzud_survival_rate_of_young_bod_per_breeding_female= 31.97   
+Routine_bog_loss=0.0261
+Routine_bod_loss=0.0340
+Dzud_growth_bog=0.4686 #correspond aux pertes moyennes à KTL durant le dzud avec une moyenne pondérées de profil général KTL 2013
+Dzud_growth_bod=0.7393 #correspond aux pertes moyennes à KTL durant le dzud avec une moyenne pondérées de profil général KTL 2013
+Sheep_units_bog=0.94
+Sheep_units_bod=6.33
+Mean_bog_yearly_increase=0.159
+Mean_bod_yearly_increase=0.149
+
+#Paramètres économiques    
+Fiber_income_bog=10252. #real 10252 / 90% : 23940
+Fiber_income_bod=5821.
+Price_live_bog=114435. #real 114435 / 10% : 18620
+Price_live_bod=804248.
+Bog_skin_price=17105.
+Bod_hide_price=25512.
+
+#Milk production
+Mean_bog_milk_production=8.
+Mean_bod_milk_production=66. #Last estimation
+
+
+
+###############
+# Constraints #
+###############
+Nb_family_members=4. #4.25 from herders interviewsl
+Per_capita_poverty=1164317*Coef_poverty_line #excludes livestock products
+Per_capita_milk_consumption=191.
+Mean_herding_costs=769000.
+Subsistence_bog=25.
+Subsistence_bod=2.
+Riding_and_draught_bod=10. #corresponds to 1 riding horse with the virtual bod made from Khomyn Tal
+
+#Climate scenario
+Seuil_dzud=1 #valeur de l'indice de# dzud
+Hazard=[ 0.7,  0.7,  3.5,  0.7,  0.7,  3.5,  0.7,  0.7,  3.5,  0.7,  0.7,  3.5,  0.7,  0.7,  3.5,  0.7,  0.7,  3.5,  0.7,  0.7,  3.5,  0.7,  0.7,  3.5,  0.7] #Established by observing that on the last 22 year time serie we had 7 years with a hazard equal to that of a dzud (about one year out of 3)
+Pest  =[ 91.0, 91.0, 91.0, 91.0, 36.4, 91.0, 91.0, 91.0, 91.0, 36.4, 91.0, 91.0, 91.0, 91.0, 36.4, 91.0, 91.0, 91.0, 91.0, 36.4, 91.0, 91.0, 91.0, 91.0, 36.4] #Established by observing that on the last 22 year time serie we had 4 years with a hazard equal to that of a dzud (about one year out of 5)
+Stoch_yrs=[[0.7,91.0,float(8)/15],[3.5,91.0,float(4)/15],[0.7,36.4,float(2)/15],[3.5,36.4,float(1)/15]] #re-calculated with proportions on 22 years
+
+#Discretization
+Max_UB=700.
+Min_UB=100.
+Discretization_UB=int(24*discr_coeff) #the mean variation is 32kg/year so the discretization interval is chosen to be below that value
+UB_interval=(Max_UB-Min_UB)/Discretization_UB #(Max_UB-Min_UB)/Discretization_UB
+
+Max_bog=498.
+Min_bog=0.
+Max_bod=90.
+Min_bod=0.
+Discretization_bog=int(83*discr_coeff) #the mean variation is 24bog/year so the discretization interval is chosen to be below that value
+Discretization_bod=int(90*discr_coeff) #the mean variation is 6bod/year so the discretization interval is chosen to be below that value
+Bog_interval=(Max_bog-Min_bog)/Discretization_bog
+Bod_interval=(Max_bod-Min_bod)/Discretization_bod
+
+Max_bog_sale=100.
+Min_bog_sale=-100.
+Max_bod_sale=20.
+Min_bod_sale=-20.
+Discretization_bog_sale=int(10*discr_coeff)
+Discretization_bod_sale=int(10*discr_coeff)
+Bog_sale_interval=(Max_bog_sale-Min_bog_sale)/Discretization_bog_sale
+Bod_sale_interval=(Max_bod_sale-Min_bod_sale)/Discretization_bod_sale
+
+#Generation of Trajectories_space and Capture_basin matrix
+Viable_trajectories_space=numpy.zeros((Horizon,Discretization_UB+1,Discretization_bog+1,Discretization_bod+1,Discretization_bog_sale+1,Discretization_bod_sale+1)) #Matrix used to store all the viable trajectories and extract in the end the viability kernel
+Viability_kernel=numpy.zeros((Discretization_UB+1,Discretization_bog+1,Discretization_bod+1,Discretization_bog_sale+1,Discretization_bod_sale+1)) #Matrix used to store all the viable trajectories and extract in the end the viability kernel
+
+
+######################################################
+#         Definition of dynamics functions           #
+######################################################
+def dynamique_biomasses(ub,bog,bod,pe):
+    ub_next = ub*(1 - mortality*(1+densdep*ub)) + max(0,storage*(ub*rue*pe-(Conso_sheep_unit*(Sheep_units_bog*bog+Sheep_units_bod*bod)/Surf_zone_ete))*(1-densdep*ub)) #AB(t)=rup*UB(t)
+    ub_next = max(2,ub_next)    
+    return ub_next
+
+def Bog_dynamics(Bog,idzud,UseFactor):
+    if idzud<Seuil_dzud:
+        Post_loss_bog = Bog*(1-Routine_bog_loss)
+        Bog_fecundity = min(Max_survival_rate_of_young_bog_per_breeding_female,max(Min_survival_rate_of_young_bog_per_breeding_female,((1-UseFactor)*Slope_survival_rate_of_young_bog_per_breeding_female+Intercept_survival_rate_of_young_bog_per_breeding_female)/100))
+        Post_birth_bog = Post_loss_bog*(1 + Mature_female_bog * Bog_fecundity)   
+    else:
+        Post_dzud_bog = Bog*Dzud_growth_bog
+        Bog_fecundity = Dzud_survival_rate_of_young_bog_per_breeding_female/100
+        Post_birth_bog = Post_dzud_bog*(1 + Mature_female_bog * Bog_fecundity)
+        
+    Final_bog = max(0,Post_birth_bog)    
+    return Final_bog, Bog_fecundity 
+       
+def Bod_dynamics(Bod,idzud,UseFactor):
+    if idzud<Seuil_dzud:
+        Post_loss_bod = Bod*(1-Routine_bod_loss)
+        Bod_fecundity = min(Max_survival_rate_of_young_bod_per_breeding_female,max(Min_survival_rate_of_young_bod_per_breeding_female,((1-UseFactor)*Slope_survival_rate_of_young_bod_per_breeding_female+Intercept_survival_rate_of_young_bod_per_breeding_female)/100))
+        Post_birth_bod = Post_loss_bod*(1 + Mature_female_bod * Bod_fecundity)    
+    else:
+        Post_dzud_bod = Bod*Dzud_growth_bod
+        Bod_fecundity = Dzud_survival_rate_of_young_bod_per_breeding_female/100
+        Post_birth_bod = Post_dzud_bod*(1 + Mature_female_bod * Bod_fecundity)
+    Final_bod = max(0,Post_birth_bod)    
+    return Final_bod, Bod_fecundity
+    
+def dynamique_income(Bog_before_culling,Bod_before_culling,Bog_after_culling_and_subsistence,Bod_after_culling_and_subsistence,Bog_sale,Bod_sale):
+    Income_culling = max(0,(Price_live_bog*(Bog_before_culling/Age_culling_bog - Subsistence_bog))) + max(0,(Price_live_bod*(Bod_before_culling/Age_culling_bod - Subsistence_bod)))
+    Income_fiber = Bog_before_culling*Fiber_income_bog + Bod_before_culling*Fiber_income_bod
+    Income_sales_bog = Bog_sale*Price_live_bog
+    Income_sales_bod = Bod_sale*Price_live_bod
+
+    if Subsistence_bog <= Bog_before_culling:
+        Income_skin_bog = Subsistence_bog*Bog_skin_price
+    else:
+        Income_skin_bog = Bog_skin_price*Bog_before_culling
+        
+    if Subsistence_bod <= Bod_before_culling:
+        Income_hide_bod = Subsistence_bod*Bod_hide_price
+    else:
+        Income_hide_bod = Bod_hide_price*Bod_before_culling
+        
+    Total_income = Income_culling + Income_fiber + Income_sales_bog + Income_sales_bod + Income_skin_bog + Income_hide_bod - Mean_herding_costs 
+    return Total_income
+    
+def dynamic_of_state_control_combination(Ub,Bog,Bod,Bog_sale,Bod_sale,Pe,Idzud,Use_factor):
+    bog_before_culling_and_fecundity = Bog_dynamics(Bog,Idzud,Use_factor)
+    bod_before_culling_and_fecundity = Bod_dynamics(Bod,Idzud,Use_factor)
+    bog_before_culling = bog_before_culling_and_fecundity[0]
+    bod_before_culling = bod_before_culling_and_fecundity[0]
+    bog_fecundity = bog_before_culling_and_fecundity[1]
+    bod_fecundity = bod_before_culling_and_fecundity[1]
+    ub_temp = dynamique_biomasses(Ub,Bog,Bod,Pe)
+    bog_after_culling_and_subsistence = max(0,min(bog_before_culling*(1-1/Age_culling_bog),bog_before_culling-Subsistence_bog))
+    bod_after_culling_and_subsistence = max(0,min(bod_before_culling*(1-1/Age_culling_bod),bod_before_culling-Subsistence_bod))
+    income_generated = dynamique_income(bog_before_culling,bod_before_culling,bog_after_culling_and_subsistence,bod_after_culling_and_subsistence,Bog_sale,Bod_sale)
+    bog_next = bog_after_culling_and_subsistence - Bog_sale
+    bod_next = bod_after_culling_and_subsistence - Bod_sale
+    final_UB=max(Min_UB,min(Max_UB,ub_temp)) #used to prevent the states going above the maximum values of UB goes out of the matrix
+    final_bog=max(Min_bod,min(Max_bog,bog_next)) #used to prevent the states going above the maximum values of bog goes out of the matrix
+    final_bod=max(Min_bog,min(Max_bod,bod_next)) #used to prevent the states going above the maximum values of bod goes out of the matrix
+    final_bog_sale=Bog_sale
+    final_bod_sale=Bod_sale
+    
+    return income_generated,final_UB,final_bog,final_bod,bog_before_culling,bod_before_culling,bog_after_culling_and_subsistence,bod_after_culling_and_subsistence,final_bog_sale,final_bod_sale,bog_fecundity,bod_fecundity
+
+
+def viability_of_the_state_control_combination(Year,Next_state,Use_factor):
+    if  (numpy.amax(Viable_trajectories_space[Year+1,int(round((Next_state[1]-Min_UB)/UB_interval)),int(round((Next_state[2]-Min_bog)/Bog_interval)),int(round((Next_state[3]-Min_bod)/Bod_interval)),:,:]) != 0#must lead to a viable control/state next year
+        and Next_state[4]>= Subsistence_bog and Next_state[5]>= Subsistence_bod #Meat subsistence constraint
+        and Next_state[7]>=Riding_and_draught_bod and Next_state[3]>=Riding_and_draught_bod#Enough riding horse in the bod
+        and (Next_state[4]*Mean_bog_milk_production*Next_state[10] + Next_state[5]*Mean_bod_milk_production*Next_state[11]) >= Per_capita_milk_consumption*Nb_family_members  #milk consumption constraint
+        and Next_state[0]>=Per_capita_poverty*Nb_family_members #Respect of income constraint
+        and Next_state[6]>=Next_state[8] and Next_state[7]>=Next_state[9]): #No more sales than available animals
+        Viability=numpy.amax(Viable_trajectories_space[Year+1,int(round((Next_state[1]-Min_UB)/UB_interval)),int(round((Next_state[2]-Min_bog)/Bog_interval)),int(round((Next_state[3]-Min_bod)/Bod_interval)),:,:])
+    else:
+        Viability=0
+        
+    return Viability
+
+def Save_Pick(object_to_save,file_name):
+    outfile=open(str('Save_')+str(file_name)+'.p','wb')
+    pickle.dump(object_to_save,outfile)
+    outfile.close() 
+    
+
+##################################
+# Introduction of the simulation #
+##################################
+print("Beginning of the simulation")
+print("")
+print("Size of the value function matrix for all t:", (Discretization_UB+1)*(Discretization_bog+1)*(Discretization_bod+1)*(Discretization_bog_sale+1)*(Discretization_bod_sale+1)*Horizon," cells.")
+print("")
+print("")
+
+##############################################################
+# Creation of the viable state space (kernel) on horizon T   #
+##############################################################
+
+#The viable states on horizon will have to provide, based on a mean growth rate, enough subsistence (meat and milk), income, mount/draught, and of course be balanced from a forage viewpoint
+for j in range(int(Discretization_UB+1)):
+    for k in range(int(Discretization_bog+1)):
+        for l in range(int(Discretization_bod+1)):            
+            for m in range(int(Discretization_bog_sale+1)):
+                for n in range(int(Discretization_bod_sale+1)):
+                    for yr in Stoch_yrs:
+                        Haz=yr[0]
+                        Pest=yr[1]
+                        Prop=yr[2]
+                        
+                        use_factor=(Sheep_units_bog*(k*Bog_interval+Min_bog)+Sheep_units_bod*(l*Bod_interval+Min_bod))*Conso_sheep_unit / ((j*UB_interval+Min_UB)*Surf_zone_ete*rue*Pest + otor_forage) #pourcentage de biomasse consommée
+                        idzud=Haz*use_factor
+                        next_state=dynamic_of_state_control_combination(j*UB_interval+Min_UB,k*Bog_interval+Min_bog,l*Bod_interval+Min_bod,m*Bog_sale_interval+Min_bog_sale,n*Bod_sale_interval+Min_bod_sale,Pest,idzud,use_factor)
+                        if (next_state[1]>= Threshold_biomass_horizon and
+                            next_state[6]>=next_state[8] and next_state[7]>=next_state[9] #No more sale than livetock available
+                            and next_state[4]>= Subsistence_bog and next_state[5]>= Subsistence_bod #Meat subsistence during horizon year
+                            and next_state[7]>=Riding_and_draught_bod and next_state[3]>=Riding_and_draught_bod
+                            and (next_state[4]*Mean_bog_milk_production*next_state[10] + next_state[5]*Mean_bod_milk_production*next_state[11]) >= Per_capita_milk_consumption*Nb_family_members
+                            and next_state[0] > Per_capita_poverty*Nb_family_members
+                            and next_state[2] >= Threshold_bog_horizon and next_state[3] >= Threshold_bod_horizon): #income constraint on horizon year                     
+                            Viable_trajectories_space[Horizon-1,j,k,l,m,n]+=1*Prop #In the horizon we test the forage availability for the current livestock number and the subsistence constraint with the current numbers after removal of the animals transmitted to the children
+                    
+if numpy.sum(Viable_trajectories_space)==0:
+    print("No Viable state at the time horizon (",Horizon,"years)")
+else:
+    print("There are", numpy.sum(Viable_trajectories_space),"viable states at the time horizon (",Horizon,"years) i.e.",round((100*numpy.sum(Viable_trajectories_space)/((Discretization_UB+1)*(Discretization_bog+1)*(Discretization_bod+1)*(Discretization_bog_sale+1)*(Discretization_bod_sale+1))),2),"% of the state space.")  
+print(" ")
+                        
+########################################################################
+# Creation of the trajectories that can reach the Horizon viable state # 
+########################################################################
+#Save_Pick(Kernel_type,'Viability_310714_1')    
+Time_serie=range(Horizon-1)
+for i in reversed(Time_serie):
+    if numpy.amax(Viable_trajectories_space[i+1,:,:,:,:])==0:
+        print("The value function matrix became empty on year",i+1)
+    else:
+        print("computing year", i+1)
+        print("")
+        for j in range(int(Discretization_UB+1)):        
+            for k in range(int(Discretization_bog+1)):            
+                for l in range(int(Discretization_bod+1)):                 
+                    for m in range(int(Discretization_bog_sale+1)):
+                        for n in range(int(Discretization_bod_sale+1)):
+                            temp_viab=0
+                            for yr in Stoch_yrs:
+                                Haz=yr[0]
+                                Pest=yr[1]
+                                Prop=yr[2]
+                                use_factor=(Sheep_units_bog*(k*Bog_interval+Min_bog)+Sheep_units_bod*(l*Bod_interval+Min_bod))*Conso_sheep_unit / ((j*UB_interval+Min_UB)*Surf_zone_ete*rue*Pest + otor_forage) #pourcentage de biomasse consommée
+                                idzud=Haz*use_factor
+                                next_state=dynamic_of_state_control_combination(j*UB_interval+Min_UB,k*Bog_interval+Min_bog,l*Bod_interval+Min_bod,m*Bog_sale_interval+Min_bog_sale,n*Bod_sale_interval+Min_bod_sale,Pest,idzud,use_factor)                            
+                                temp_viab+=Prop*viability_of_the_state_control_combination(i,next_state,use_factor)
+                            Viable_trajectories_space[i,j,k,l,m,n]=temp_viab
+
+print(" ")
+print("The matrices have been computed")
+print(" ")
+
+############################################################
+#      Extracting t0 Matrices (true kernel and basin)      #
+############################################################
+Viability_kernel=numpy.take(Viable_trajectories_space,0,axis=0)
+
+#############################################
+#            Save matrix files              #
+#############################################
+print("Saving matrices")
+print(" ")
+Save_Pick(Viable_trajectories_space,file_name_save_viable_space_matrix)
+Save_Pick(Viability_kernel,file_name_save_viable_space_matrix_t0)
+ 
+#################################################
+#Extraction of the viability kernel at year zero#
+#################################################
+print("Extraction of the value function matrix at year zero")
+print(" ")
+
+Viability_kernel=numpy.zeros((Discretization_UB+1,Discretization_bog+1,Discretization_bod+1))
+for j in range(int(Discretization_UB+1)):
+    for k in range(int(Discretization_bog+1)):
+        for l in range(int(Discretization_bod+1)):
+            Viability_kernel[j,k,l]=numpy.max(Viable_trajectories_space[Year_of_viability_kernel_extraction,j,k,l,:,:])
+
+
+print("value function matrix  at year zero extracted")
+print(" ")
+print("Now slicing the value function matrix  at year zero on the initial underground biomass value.")
+print(" ")
+print( Viability_kernel[int((Initial_UB-Min_UB)/UB_interval),:,:])                   
+
+plt.figure(1)
+plot_1 = plt.imshow(Viability_kernel[int((Initial_UB-Min_UB)/UB_interval),:,:].T, cmap=cm.Blues, interpolation='nearest', origin='lower', extent=[Min_bog, Max_bog, Min_bod, Max_bod], aspect = (Max_bog-Min_bod)/(Max_bod-Min_bod))
+plt.xlabel('Bog number')
+plt.ylabel('Bod number')
+plt.title('value function matrix with probability of constraint respect')
+plt.colorbar(plot_1)
+plt.grid(True)
