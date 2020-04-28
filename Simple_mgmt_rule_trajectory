@@ -1,1 +1,683 @@
+import matplotlib.pyplot as plt
+import random
+import numpy
 
+
+##############################                          
+#     Type of simulation     #
+##############################
+Coef_poverty_line=1
+Analysis_type = 3 #Analysis_type = 1 to plot one trajectory and Analysis_type = 3 compute and print statistics over n trajectories (n=NB_iterations)  
+Horizon=100       #Length of the trajectories in years
+NB_iterations= 1000 #Number of trajectories on which computing statistics 
+replicate=1    #Number of replicates over which management options (herd size max) will be tested
+
+
+#Management parameter of the trajectory
+Max_viable_SFU_threshold_initial=100000
+Max_viable_SFU_threshold_delta=10
+Post_dzud_exchange_ratio=0.135
+
+Initial_Bog=252#•252.
+Initial_Bod=36# 36.
+Initial_UB=500
+
+#Rangeland resource parameters
+otor_forage = 160000. #8000000 divisé par 50
+Surf_zone_ete=1800.
+
+#Biomass sub-model:
+rue=0.0045 #Rain use efficiency
+storage=0.73581 #Taux de mise en réserve des racines
+mortality=0.05785 #Facteur de mortalité des racines
+Conso_sheep_unit=207.7 #Consommation par sheep unit pendant les 5 mois passés sur la zone d'été (1 day = 1.385 kg of dry matter during 150 days - moyenne de 1 et 1.77)
+densdep=0.00112 #Paramètre de densité dépendance de la mortalité de biomasse souterraine et de mise en réserve
+
+#Paramètres des sous-modèles démographiques animaux    
+Perc_female_bog=0.533 #parameter to be entered
+Perc_female_bod=0.510 #parameter to be entered
+Age_culling_bog=7. #parameter to be entered (determined from herders interviews)
+Age_culling_bod=14. #parameter to be entered (determined from herders interviews)
+Age_first_delivery_bog=2. #parameter to be entered (determined from herders interviews)
+Age_first_delivery_bod=3. #parameter to be entered (determined from herders interviews)
+Mature_female_bog=Perc_female_bog*(Age_culling_bog-Age_first_delivery_bog)/Age_culling_bog
+Mature_female_bod=Perc_female_bod*(Age_culling_bod-Age_first_delivery_bod)/Age_culling_bod
+Slope_survival_rate_of_young_bog_per_breeding_female=63.30 #Linear regression between use factor and fecundity / Khovd statistics
+Slope_survival_rate_of_young_bod_per_breeding_female=56.33 #Linear regression between use factor and fecundity / Khovd statistics
+Intercept_survival_rate_of_young_bog_per_breeding_female=35.00 #Linear regression between use factor and fecundity / Khovd statistics
+Intercept_survival_rate_of_young_bod_per_breeding_female=17.11 #Linear regression between use factor and fecundity / Khovd statistics
+Max_survival_rate_of_young_bog_per_breeding_female=0.974 #restrains the linear regression between use factor and fecundity / Khovd statistics
+Max_survival_rate_of_young_bod_per_breeding_female=0.7436 #restrains the linear regression between use factor and fecundity / Khovd statistics
+Min_survival_rate_of_young_bog_per_breeding_female=0.3536 #restrains the linear regression between use factor and fecundity / Khovd statistics
+Min_survival_rate_of_young_bod_per_breeding_female=0.2824 #restrains the linear regression between use factor and fecundity / Khovd statistics    
+Dzud_survival_rate_of_young_bog_per_breeding_female=40.19
+Dzud_survival_rate_of_young_bod_per_breeding_female= 31.97   
+Routine_bog_loss=0.0261
+Routine_bod_loss=0.0340
+Dzud_growth_bog=0.4686 #correspond aux pertes moyennes à KTL durant le dzud avec une moyenne pondérées de profil général KTL 2013
+Dzud_growth_bod=0.7393 #correspond aux pertes moyennes à KTL durant le dzud avec une moyenne pondérées de profil général KTL 2013
+Sheep_units_bog=0.94
+Sheep_units_bod=6.33
+Mean_bog_yearly_increase=0.159
+Mean_bod_yearly_increase=0.149
+
+#Paramètres économiques    
+NB_family_members=4. #nombre moyen d'adultes par famille
+Fiber_income_bog=10252. #real 10252 / 90% : 23940
+Fiber_income_bod=5821.
+Price_live_bog=114435. #real 114435 / 10% : 18620
+Price_live_bod=804248.
+Bog_skin_price=17105.
+Bod_hide_price=25512.
+
+#Milk production
+Mean_bog_milk_production=8.
+Mean_bod_milk_production=66. #Last estimation
+
+#########################
+# Constraint thresholds #
+#########################
+Per_capita_poverty=1164317.*Coef_poverty_line #excludes livestock products
+Mean_herding_costs=769000.
+Per_capita_milk_consumption=191.
+Subsistence_bog=25.
+Subsistence_bod=2.
+Riding_and_draught_bod=10. #corresponds to 1 riding horse with the virtual bod made from Khomyn Tal
+
+#Climate scenario
+Seuil_dzud=1 #valeur de l'indice de# dzud
+Pest=[103.51, 111.82, 38.85, 24.81, 182.96, 144.95, 52.57, 113.14, 14.38, 78.56, 61.28, 76.05, 80.89, 75.81, 104.46, 121.26, 121.47, 102.55, 93.88, 90.34, 92.04, 71.16, 99.65, 103.46, 94.59, 77.65, 39.81, 58.76, 17.81, 91.98, 41.77, 30.22, 67.34, 88.3, 114.61, 23.02, 50.41, 97.66, 49.95, 101.11, 140.08, 131.37, 53.82, 33.62, 144.15, 154.52, 155.7, 80.18, 49.27, 57.78, 99.23, 103.56, 51.33, 29.42, 161.98, 85.64, 125.36, 61.55, 160.78, 87.86, 28.17, 110.66, 156.61, 175.85, 54.62, 79.78, 83.74, 16.57, 105.63, 100.76, 55.89, 134.0, 106.35, 84.9, 30.53, 127.34, 29.08, 57.54, 72.06, 83.45, 84.9, 46.92, 72.66, 135.7, 71.54, 140.47, 150.97, 95.25, 23.78, 79.44, 67.99, 62.62, 47.9, 21.36, 60.62, 18.52, 77.68, 98.38, 109.72, 72.57, 159.1, 79.69, 139.61, 109.1, 159.19, 129.9, 28.41, 90.05, 57.25, 186.32, 129.14, 83.6, 115.31, 28.41, 89.85, 95.67, 49.3, 96.91, 55.18, 124.52, 36.22, 139.7, 75.94, 16.62, 87.22, 71.84, 152.78, 54.51, 92.9, 83.68, 127.31, 116.95, 92.98, 119.31, 46.29, 127.44, 26.0, 44.76, 77.2, 89.85, 113.73, 116.56, 44.04, 79.25, 20.72, 47.9, 61.49, 58.26, 77.63, 70.67, 88.57, 66.66, 87.79, 67.16, 148.03, 80.11, 90.79, 54.68, 25.89, 62.87, 31.84, 95.63, 38.08, 127.05, 100.31, 59.75, 124.24, 72.72, 22.75, 32.99, 87.21, 90.71, 107.19, 141.93, 116.06, 40.12, 113.37, 75.8, 28.45, 92.32, 136.52, 17.42, 72.15, 90.59, 86.65, 150.28, 61.66, 115.24, 109.58, 1.25, 133.28, 110.83, 102.36, 95.78, 39.47, 49.69, 82.32, 65.98, 82.18, 23.5, 85.11, 59.64, 52.27, 128.18, 4.74, 35.11, 105.45, 13.97, 43.38, 42.29, 97.13, 70.51, 56.85, 123.02, 54.12, 34.78, 52.03, 81.36, 67.11, 106.13, 125.86, 53.11, 67.62, 125.8, 61.8, 113.98, 53.21, 37.51, 150.05, 29.53, 71.03, 16.5, 29.07, 50.87, 132.72, 59.26, 58.47, 129.84, 25.24, 85.87, 45.78, 95.17, 32.79, 99.2, 91.54, 122.82, 106.3, 78.38, 52.09, 178.7, 34.39, 126.93, 27.94, 67.14, 125.84, 90.64, 55.39, 92.41, 72.6, 81.42, 40.74, 73.54, 29.22, 49.67, 119.67, 74.65, 52.02, 86.5, 108.74, 82.17, 76.3, 68.96, 36.67, 54.04, 45.81, 83.48, 48.29, 86.2, 60.32, 63.25, 104.28, 39.63, 46.11, 85.26, 112.31, 31.91, 112.72, 68.38, 46.54, 77.73, 54.96, 114.08, 65.7, 88.69, 69.27, 113.96, 119.93, 120.8, 143.4, 90.97, 155.66, 97.44, 96.98, 134.89, 62.29, 37.59, 89.11, 28.61, 139.15, 72.31, 61.96, 58.3, 111.76, 62.99, 3.72, 149.3, 116.96, 1.87, 60.26, 53.92, 54.68, 65.84, 0.93, 71.81, 25.88, 133.73, 112.03, 91.53, 128.06, 60.8, 102.92, 43.23, 48.35, 96.93, 58.12, 71.74, 37.02, 21.69, 57.29, 96.53, 18.7, 119.5, 50.21, 92.24, 92.82, 172.87, 64.51, 49.49, 102.9, 80.04, 25.39, 94.99, 15.1, 88.98, 58.08, 54.94, 4.81, 10.97, 127.5, 32.08, 140.07, 89.78, 65.14, 159.96, 73.35, 51.65, 51.95, 70.91, 46.6, 72.13, 53.66, 196.29, 112.99, 74.57, 41.14, 49.63, 128.69, 104.44, 88.83, 82.45, 92.15, 36.4, 177.0, 85.97, 48.97, 108.1, 50.65, 80.85, 65.96, 44.31, 25.66, 125.69, 182.97, 90.19, 107.5, 85.14, 63.95, 66.52, 110.84, 50.8, 143.74, 87.75, 98.28, 105.3, 72.15, 204.74, 48.34, 49.31, 53.98, 40.31, 96.91, 70.19, 65.89, 82.63, 69.62, 95.83, 134.48, 61.53, 230.01, 53.53, 32.07, 91.11, 114.52, 41.38, 55.34, 91.85, 55.66, 81.91, 83.79, 123.99, 74.54, 103.07, 53.79, 132.56, 201.72, 61.58, 61.54, 89.95, 70.91, 92.88, 65.82, 148.47, 88.24, 81.22, 77.73, 155.43, 139.95, 101.25, 55.87, 154.99, 40.03, 1.23, 50.48, 126.89, 129.75, 103.83, 129.38, 52.79, 18.43, 84.09, 55.36, 39.05, 60.28, 76.03, 152.88, 123.79, 72.2, 65.91, 66.4, 81.86, 175.92, 49.56, 67.35, 126.36, 75.52, 104.07, 131.5, 71.89, 126.01, 114.46, 161.93, 67.2, 87.89, 144.74, 63.61, 65.26, 27.03, 137.74, 69.5, 118.14, 108.66, 75.96, 7.66, 136.4, 71.21, 36.01, 52.29, 31.59, 64.69, 62.45, 38.23, 20.93, 121.75, 65.1, 49.28, 57.95, 95.86, 59.96, 9.12, 123.27, 51.94, 1.59, 57.3, 60.01, 81.95, 203.08, 111.43, 64.71, 70.8, 60.54, 27.98, 85.64, 43.44, 64.0, 65.47, 60.41, 186.02, 95.56, 63.04, 93.17, 50.36, 47.94, 157.1, 86.41, 28.1, 38.88, 223.71, 118.1, 76.03, 23.92, 36.22, 150.34, 39.63, 58.7, 50.03, 125.57, 62.68, 26.43, 150.01, 110.76, 86.7, 51.32, 54.16, 51.03, 139.16, 121.83, 70.18, 120.19, 113.76, 132.13, 32.58, 64.96, 148.15, 67.68, 123.6, 29.62, 88.89, 24.08, 28.72, 51.23, 65.4, 47.52, 113.62, 87.79, 18.38, 69.06, 129.25, 31.07, 82.77, 105.73, 87.72, 2.64, 187.69, 57.97, 152.46, 188.33, 33.18, 111.8, 92.01, 139.81, 54.89, 131.62, 113.96, 37.14, 85.0, 68.79, 48.84, 27.0, 66.83, 87.02, 106.04, 119.38, 26.23, 97.18, 97.99, 97.23, 108.34, 95.27, 124.87, 80.14, 66.42, 6.42, 20.31, 103.22, 58.87, 57.13, 57.43, 23.66, 104.44, 102.5, 69.14, 106.62, 28.04, 52.67, 44.52, 109.68, 50.0, 147.68, 29.93, 174.69, 57.29, 46.4, 161.32, 30.68, 132.88, 97.32, 73.74, 103.09, 70.11, 64.69, 87.92, 85.63, 49.78, 97.67, 53.7, 31.16, 83.22, 80.8, 65.7, 104.62, 53.98, 133.03, 170.43, 93.72, 18.78, 143.65, 80.67, 59.05, 84.97, 49.77, 67.19, 115.26, 50.44, 26.91, 34.76, 128.02, 24.29, 23.99, 129.43, 72.75, 22.74, 102.36, 57.47, 113.61, 26.59, 89.28, 164.77, 54.0, 96.48, 67.3, 13.59, 129.33, 47.11, 99.27, 50.59, 177.45, 64.83, 84.15, 27.31, 90.85, 54.32, 60.89, 82.67, 47.73, 48.22, 148.68, 57.85, 236.29, 104.41, 98.53, 183.37, 107.56, 55.43, 41.83, 42.86, 92.39, 136.98, 89.89, 132.04, 114.58, 75.13, 49.21, 70.66, 52.11, 91.35, 113.73, 90.97, 105.87, 110.32, 23.88, 131.53, 163.4, 105.93, 49.91, 48.15, 27.26, 109.97, 57.72, 54.08, 84.32, 105.57, 4.36, 36.8, 104.48, 46.44, 83.58, 72.86, 109.1, 25.34, 75.09, 224.7, 4.68, 21.35, 70.85, 166.65, 104.75, 137.36, 86.33, 17.52, 113.78, 55.6, 47.35, 118.14, 56.93, 63.03, 177.29, 129.16, 33.81, 32.39, 151.98, 49.87, 80.05, 23.54, 31.52, 168.84, 49.42, 60.17, 49.94, 84.29, 65.72, 41.06, 71.43, 123.83, 95.57, 77.43, 161.91, 51.5, 143.99, 47.54, 89.01, 91.08, 63.43, 129.93, 1.15, 82.23, 83.41, 166.25, 22.34, 43.3, 83.3, 147.32, 64.06, 84.77, 34.07, 94.15, 134.22, 41.86, 27.96, 22.24, 89.56, 86.47, 46.76, 28.18, 38.26, 84.28, 159.65, 109.47, 94.83, 37.28, 179.08, 164.45, 96.32, 89.61, 27.4, 212.03, 82.43, 56.91, 48.92, 20.01, 31.29, 64.29, 88.06, 128.92, 75.38, 54.48, 46.69, 107.96, 137.04, 73.08, 28.9, 30.66, 49.47, 41.52, 57.01, 139.49, 16.47, 160.24, 60.58, 119.79, 19.8, 91.86, 77.74, 103.52, 95.44, 78.06, 74.79, 68.87, 37.57, 86.25, 17.93, 118.97, 75.77, 130.32, 114.78, 80.89, 48.68, 70.61, 91.86, 79.03, 65.79, 61.77, 61.98, 105.67, 12.61, 103.33, 134.88, 107.79, 19.44, 152.17, 120.45, 38.95, 83.94, 82.81, 79.14, 22.09, 25.24, 86.8, 88.17, 2.48, 98.4, 24.03, 38.82, 60.69, 44.3, 91.69, 24.1, 24.61, 175.04, 42.73, 91.83, 97.13, 139.28, 144.22, 92.23, 43.26, 100.83, 110.26, 108.48, 36.59, 17.6, 78.62, 21.28, 126.24, 25.2, 105.92, 67.2, 101.22, 58.42, 29.24, 40.44, 95.18, 136.7, 69.17, 59.76, 88.54, 9.81, 54.42, 72.27, 76.57, 64.4, 114.35, 112.66, 112.6, 51.8, 55.47, 91.33, 92.69, 87.67, 68.39, 17.99, 111.68, 69.08, 33.98, 203.89, 59.44, 83.57, 70.91, 110.66, 53.55, 97.63, 67.83, 139.3, 43.28, 49.04, 93.29, 53.17, 42.55, 68.86, 113.95, 64.6, 52.27, 170.84, 110.47, 98.06, 110.61, 28.65, 67.93, 5.22, 109.23, 21.14, 135.93, 53.12, 99.39, 95.28, 88.48, 90.58, 115.61, 30.59, 106.58, 90.86, 88.36, 140.0, 114.96, 103.15, 62.34, 69.04, 60.28, 24.6, 123.79, 95.86, 97.43, 52.24, 73.18, 174.69, 127.74, 97.78, 127.87, 23.44, 58.92, 4.35, 83.28, 56.23, 35.86, 144.24, 13.77, 104.21, 98.46, 46.05, 90.66, 102.77]
+    
+#Discretization (not useful in this script but kept for consistency with the stochastic viability trajectory script)
+discr_coeff=1
+Max_UB=700.
+Min_UB=100.
+
+Discretization_UB=int(24*discr_coeff) #the mean variation is 32kg/year so the discretization interval is chosen to be below that value
+UB_interval=(Max_UB-Min_UB)/Discretization_UB #(Max_UB-Min_UB)/Discretization_UB
+
+Max_bog=500.
+Min_bog=0.
+Max_bod=90.
+Min_bod=0.
+Discretization_bog=int(50*discr_coeff) #the mean variation is 24bog/year so the discretization interval is chosen to be below that value
+Discretization_bod=int(45*discr_coeff) #the mean variation is 6bod/year so the discretization interval is chosen to be below that value
+Bog_interval=(Max_bog-Min_bog)/Discretization_bog
+Bod_interval=(Max_bod-Min_bod)/Discretization_bod
+
+Max_bog_sale=100.
+Min_bog_sale=-100.
+Max_bod_sale=20.
+Min_bod_sale=-20.
+Discretization_bog_sale=int(10*discr_coeff)
+Discretization_bod_sale=int(10*discr_coeff)
+Bog_sale_interval=(Max_bog_sale-Min_bog_sale)/Discretization_bog_sale
+Bod_sale_interval=(Max_bod_sale-Min_bod_sale)/Discretization_bod_sale
+
+
+######################################################################
+#   Intermediate, counting and plotting items used in simulations    #
+######################################################################
+buffer_income_window_size=0
+hard_times_window_size=1
+Cash_need=NB_family_members*Per_capita_poverty
+Global_subsistence_consumption_performance = 0.
+Global_milk_subsistence_consumption_performance = 0.
+Global_riding_draught_bod_availability_performance=0.
+Global_financial_performance = 0.
+Window_financial_performance = 0.
+Income_constraint_violation = 0.
+Subsistence_constraint_violation = 0.
+NB_dzud=0.
+Final_bog = 0.
+Final_bod = 0.
+Final_UB = 0.
+Final_viability = 0.
+Mean_bog = 0.
+Mean_bod = 0.
+Mean_herd_SFU = 0.
+Mean_UB = 0.
+Max_bog_traj = 0.
+Max_bod_traj = 0.
+Max_herd_SFU =0.
+Viability_years_count = 0.
+Count_Female_bog_fecundity = 0.
+Count_Female_bod_fecundity = 0.
+Income=0.
+Count_Income_culling_history = 0.
+Count_Income_fiber_history = 0.
+Count_Income_sale_history = 0.
+Count_Income_skin_hide_history = 0.
+Count_Number_of_viable_or_resilient_control_pairs = 0.
+Count_Number_of_viable_control_pairs =0.
+Next_state=[]
+Subsistence_performance_history=[]
+Income_performance_history=[]
+Overall_sheep_unit=[]
+Income_history=[]
+Income_culling_history=[]
+Income_fiber_history=[]
+Income_sale_history=[]
+Income_skin_hide_history=[]
+Ratio_income_need_history=[]
+Available_bog_for_subsistence_consumption=[]
+Available_bod_for_subsistence_consumption=[]
+Cash_need_line=[]
+Bog_need_line=[] #list used to plot the bog need
+Bod_need_line=[] #list used to plot the bod need
+VectPe=[]
+VectHazard=[]
+VectUse_factor=[]
+VectDzud=[]
+VectLittleDzud=[]
+Bog_Sale=[]
+Bod_Sale=[]
+Number_of_viable_or_resilient_control_pairs=[]
+Number_of_viable_control_pairs=[]
+Milk_subsistence_performance_history=[]
+Draught_riding_bod_performance_history=[]
+
+
+######################################################
+#         Definition of dynamics functions           #
+######################################################
+def dynamique_biomasses(ub,bog,bod,pe):
+    ub_next = ub*(1 - mortality*(1+densdep*ub)) + max(0,storage*(ub*rue*pe-(Conso_sheep_unit*(Sheep_units_bog*bog+Sheep_units_bod*bod)/Surf_zone_ete))*(1-densdep*ub)) #AB(t)=rup*UB(t)
+    ub_next = max(2,ub_next)    
+    return ub_next
+
+def Bog_dynamics(Bog,idzud,UseFactor):
+    if idzud<Seuil_dzud:
+        Post_loss_bog = Bog*(1-Routine_bog_loss)
+        Post_birth_bog = Post_loss_bog*(1 + Mature_female_bog*(min(Max_survival_rate_of_young_bog_per_breeding_female,max(Min_survival_rate_of_young_bog_per_breeding_female,((1-UseFactor)*Slope_survival_rate_of_young_bog_per_breeding_female+Intercept_survival_rate_of_young_bog_per_breeding_female)/100))))         
+    else:
+        Post_dzud_bog = Bog*Dzud_growth_bog
+        Post_birth_bog = Post_dzud_bog*(1+Mature_female_bog*Dzud_survival_rate_of_young_bog_per_breeding_female/100)
+    Final_bog = max(0,Post_birth_bog)    
+    return Final_bog
+       
+def Bod_dynamics(Bod,idzud,UseFactor):
+    if idzud<Seuil_dzud:
+        Post_loss_bod = Bod*(1-Routine_bod_loss)
+        Post_birth_bod = Post_loss_bod*(1 + Mature_female_bod*(min(Max_survival_rate_of_young_bod_per_breeding_female,max(Min_survival_rate_of_young_bod_per_breeding_female,((1-UseFactor)*Slope_survival_rate_of_young_bod_per_breeding_female+Intercept_survival_rate_of_young_bod_per_breeding_female)/100))))
+    else:
+        Post_dzud_bod = Bod*Dzud_growth_bod
+        Post_birth_bod = Post_dzud_bod*(1+Mature_female_bod*Dzud_survival_rate_of_young_bod_per_breeding_female/100)
+    Final_bod = max(0,Post_birth_bod)    
+    return Final_bod
+    
+def Bog_female_fecundity(idzud,UseFactor):
+    if idzud<Seuil_dzud:
+        Young_per_mature_female_bog=min(Max_survival_rate_of_young_bog_per_breeding_female,max(Min_survival_rate_of_young_bog_per_breeding_female,((1-UseFactor)*Slope_survival_rate_of_young_bog_per_breeding_female+Intercept_survival_rate_of_young_bog_per_breeding_female)/100))
+    else:
+        Young_per_mature_female_bog=Dzud_survival_rate_of_young_bog_per_breeding_female/100
+    return Young_per_mature_female_bog
+
+def Bod_female_fecundity(idzud,UseFactor):
+    if idzud<Seuil_dzud:
+        Young_per_mature_female_bod=min(Max_survival_rate_of_young_bod_per_breeding_female,max(Min_survival_rate_of_young_bod_per_breeding_female,((1-UseFactor)*Slope_survival_rate_of_young_bod_per_breeding_female+Intercept_survival_rate_of_young_bod_per_breeding_female)/100))
+    else:
+        Young_per_mature_female_bod=Dzud_survival_rate_of_young_bod_per_breeding_female/100
+    return Young_per_mature_female_bod
+      
+def income_window_performance(income_window_history,buffer_income_indow_size,besoin_cash):
+    performance=0    
+    for i in range(len(income_window_history)-buffer_income_window_size+1):
+        window_income=income_window_history[i:i+buffer_income_window_size]
+        if sum(window_income)>besoin_cash*buffer_income_window_size:
+            performance+=1
+    return 100*performance/(len(income_window_history)-buffer_income_window_size+1)
+    
+def bad_times_count(performance_history,window_size):
+    bad_year_count=0.    
+    for i in range(int(len(performance_history)-window_size+1)):
+        parameter_window=performance_history[i:i+window_size]
+        if sum(parameter_window) == 0:
+            bad_year_count+=1
+    return bad_year_count
+    
+
+def dynamique_income(Bog_before_culling,Bod_before_culling,Bog_after_culling_and_subsistence,Bod_after_culling_and_subsistence,Bog_sale,Bod_sale):
+    Income_culling = max(0,(Price_live_bog*(Bog_before_culling/Age_culling_bog - Subsistence_bog))) + max(0,(Price_live_bod*(Bod_before_culling/Age_culling_bod - Subsistence_bod)))
+    Income_fiber = Bog_before_culling*Fiber_income_bog + Bod_before_culling*Fiber_income_bod
+    Income_sales_bog = Bog_sale*Price_live_bog
+    Income_sales_bod = Bod_sale*Price_live_bod
+
+    if Subsistence_bog <= Bog_before_culling:
+        Income_skin_bog = Subsistence_bog*Bog_skin_price
+    else:
+        Income_skin_bog = Bog_skin_price*Bog_before_culling
+        
+    if Subsistence_bod <= Bod_before_culling:
+        Income_hide_bod = Subsistence_bod*Bod_hide_price
+    else:
+        Income_hide_bod = Bod_hide_price*Bod_before_culling
+        
+    Total_income = Income_culling + Income_fiber + Income_sales_bog + Income_sales_bod + Income_skin_bog + Income_hide_bod - Mean_herding_costs 
+    return Total_income
+
+def dynamic_of_state_control_combination(Ub,Bog,Bod,Bog_sale,Bod_sale,Pe,Idzud,Use_factor):
+    bog_before_culling = Bog_dynamics(Bog,Idzud,Use_factor)
+    bod_before_culling = Bod_dynamics(Bod,Idzud,Use_factor)
+    ub_temp = dynamique_biomasses(Ub,Bog,Bod,Pe)
+    bog_after_culling_and_subsistence = max(0,min(bog_before_culling*(1-1/Age_culling_bog),bog_before_culling-Subsistence_bog))
+    bod_after_culling_and_subsistence = max(0,min(bod_before_culling*(1-1/Age_culling_bod),bod_before_culling-Subsistence_bod))
+    income_generated = dynamique_income(bog_before_culling,bod_before_culling,bog_after_culling_and_subsistence,bod_after_culling_and_subsistence,Bog_sale,Bod_sale)
+    bog_next = bog_after_culling_and_subsistence - Bog_sale
+    bod_next = bod_after_culling_and_subsistence - Bod_sale
+    final_UB=max(Min_UB,min(Max_UB,ub_temp)) #used to prevent the states going above the maximum values of UB goes out of the matrix
+    final_bog=max(Min_bod,min(Max_bog,bog_next)) #used to prevent the states going above the maximum values of bog goes out of the matrix
+    final_bod=max(Min_bog,min(Max_bod,bod_next)) #used to prevent the states going above the maximum values of bod goes out of the matrix
+    final_bog_sale=Bog_sale
+    final_bod_sale=Bod_sale
+    
+    return income_generated,final_UB,final_bog,final_bod,bog_before_culling,bod_before_culling,bog_after_culling_and_subsistence,bod_after_culling_and_subsistence,final_bog_sale,final_bod_sale
+
+
+def livestock_capping_extractor(bog,bod,max_bog,max_bod,Idzud):
+    if Idzud< 1:
+        Yearly_sale_ratio=0
+    elif Idzud>= 1:
+        Yearly_sale_ratio=Post_dzud_exchange_ratio
+    Head_bog_sale=-Yearly_sale_ratio*bog + max(0,(1+Yearly_sale_ratio)*bog-max_bog)    
+    Head_bod_sale=Yearly_sale_ratio*bod + max(0,(1-Yearly_sale_ratio)*bod-max_bod)
+    
+    return Head_bog_sale,Head_bod_sale
+
+
+if Analysis_type ==1:
+    iterations = 1
+else:
+    iterations = NB_iterations
+            
+Bog=[Initial_Bog]
+Bod=[Initial_Bod]
+UB=[Initial_UB]
+Overall_sheep_unit.append(Sheep_units_bog*Bog[-1]+Sheep_units_bod*Bod[-1])
+
+###########################################
+#  Beginning of the simulation loops      #
+###########################################
+# Loop of the different max herd sizes
+for h in range(replicate):
+    Final_viability=0
+    Max_SFU = Max_viable_SFU_threshold_initial + h*Max_viable_SFU_threshold_delta
+    Max_bog_loop = (Max_SFU*0.5083)/Sheep_units_bog
+    Max_bod_loop = (Max_SFU*0.4917)/Sheep_units_bod
+    
+    # Loop of the different trajectories over n=Horizon years
+    for i in range (iterations):
+        Bog=[Initial_Bog]
+        Bod=[Initial_Bod]
+        UB=[Initial_UB]
+        Herd_SFU=[Sheep_units_bog*Initial_Bog+Sheep_units_bod*Initial_Bod]
+        Female_bog_fecundity=[]
+        Female_bod_fecundity=[]
+        Global_constraint_respect_history=[]
+        if Analysis_type == 3:
+            Next_state=[]
+            Subsistence_performance_history=[]
+            Income_performance_history=[]
+            Overall_sheep_unit=[]
+            Income_history=[]
+            Income_culling_history=[]
+            Income_fiber_history=[]
+            Income_sale_history=[]
+            Income_skin_hide_history=[]
+            Ratio_income_need_history=[]
+            Available_bog_for_subsistence_consumption=[]
+            Available_bod_for_subsistence_consumption=[]
+            Cash_need_line=[]
+            Bog_need_line=[] #list used to plot the bog need
+            Bod_need_line=[] #list used to plot the bod need
+            VectPe=[]
+            VectHazard=[]
+            VectUse_factor=[]
+            VectDzud=[]
+            VectLittleDzud=[]
+            Bog_Sale=[]
+            Bod_Sale=[]
+            Number_of_viable_or_resilient_control_pairs=[]
+            Milk_subsistence_performance_history=[]
+            Draught_riding_bod_performance_history=[]
+        
+        # Loop of each year of each trajectory
+        for t in range (Horizon):
+            if Analysis_type ==1:
+                print('year=',t+1)
+                
+            #Weather parameters
+            PH=max(0,random.normalvariate(8.17,4.40))   #random.choice(Phiv)
+            TH=random.normalvariate(-12.84,2.14) #random.choice(Thiv)
+            HAZARD=PH*max(0,-(TH+10))/17.6
+            if t == 0:               
+                PE_last_year=random.choice(Pest)#max(0,random.normalvariate(80.64,41.48))# #max(0,random.normalvariate(80.64,41.48))   
+                PE_this_year=random.choice(Pest)#max(0,random.normalvariate(80.64,41.48))#random.choice(Pest) #max(0,random.normalvariate(80.64,41.48))
+            if t>0:
+                PE_last_year=VectPe[-1]
+                PE_this_year=random.choice(Pest)#max(0,random.normalvariate(80.64,41.48))#random.choice(Pest) #max(0,random.normalvariate(80.64,41.48))
+            
+            USE_Factor=((Sheep_units_bog*Bog[-1]+Sheep_units_bod*Bod[-1])*Conso_sheep_unit)/(UB[-1]*Surf_zone_ete*rue*PE_last_year+otor_forage) #pourcentage de biomasse consommée
+            Aboveground_biomass_left=((UB[-1]*Surf_zone_ete*rue*PE_last_year+otor_forage)-(Sheep_units_bog*Bog[-1]+Sheep_units_bod*Bod[-1])*Conso_sheep_unit)/Surf_zone_ete
+            IDZUD=HAZARD*USE_Factor
+            
+            if Analysis_type ==1:
+                print('initial UB=',UB[-1])
+                print('initial AB=',Aboveground_biomass_left)
+                print('Use factor=',USE_Factor)
+                print('initial bog=',Bog[-1])
+                print('initial bod=',Bod[-1])
+                print('PE last year is', PE_last_year,'mm and this year is', PE_this_year,'mm')
+                print('Winter precipitation is',PH,'mm and winter temperature is',TH,'°C')
+                print('')
+         
+            bog_before_culling=Bog_dynamics(Bog[-1],IDZUD,USE_Factor)
+            bod_before_culling=Bod_dynamics(Bod[-1],IDZUD,USE_Factor)
+            Female_bog_fecundity.append(round(Bog_female_fecundity(IDZUD,USE_Factor),2))
+            Female_bod_fecundity.append(round(Bod_female_fecundity(IDZUD,USE_Factor),2))
+            if Analysis_type ==1:
+                print('bog after spring births and before culling=', bog_before_culling)
+                print('bod after spring births and before culling=', bod_before_culling)
+                print('')
+        
+            bog_after_culling_and_subsistence = max(0,min(bog_before_culling*(1-1/Age_culling_bog),bog_before_culling-Subsistence_bog))
+            bod_after_culling_and_subsistence = max(0,min(bod_before_culling*(1-1/Age_culling_bod),bod_before_culling-Subsistence_bod))
+            if Analysis_type ==1:
+                print('bog after subsistence and culling', bog_after_culling_and_subsistence)
+                print('bod after subsistence and culling', bod_after_culling_and_subsistence)
+                print('')
+            
+            #############################
+            #    Control computation    #
+            #############################
+            Controls = livestock_capping_extractor(bog_after_culling_and_subsistence,bod_after_culling_and_subsistence,Max_bog_loop,Max_bod_loop,IDZUD)
+            bog_sale=Controls[0]
+            bod_sale=Controls[1]
+            Number_of_viable_or_resilient_control_pairs.append(1)
+            
+            if Analysis_type == 1:
+                print('Controls[0] is',Controls[0], 'and Controls[1] is', Controls[1] )
+                #☺print('Viability probability is', numpy.amax(Viable_trajectories_space[t,int(round((UB[-1]-Min_UB)/UB_interval)),int(round((Bog[-1]-Min_bog)/Bog_interval)),int(round((Bod[-1]-Min_bod)/Bod_interval)),:,:]))
+                print('bog_sale=',bog_sale)
+                print('bod_sale=',bod_sale)
+                print('number of pairs of capping control=', 1)
+                print('')
+
+ 
+            next_state=dynamic_of_state_control_combination(UB[-1],Bog[-1],Bod[-1],bog_sale,bod_sale,PE_this_year,IDZUD,USE_Factor)
+            
+            if Analysis_type == 1: 
+                print('next state from dynamics function=',next_state)  
+     
+            if Subsistence_bog <= bog_before_culling:
+                Income_skin_bog = Subsistence_bog*Bog_skin_price
+            else:
+                Income_skin_bog = Bog_skin_price*bog_before_culling
+        
+            if Subsistence_bod <= bod_before_culling:
+                Income_hide_bod = Subsistence_bod*Bod_hide_price
+            else:
+                Income_hide_bod = Bod_hide_price*bod_before_culling
+
+            Income_culling = max(0,(Price_live_bog*(bog_before_culling/Age_culling_bog - Subsistence_bog))) + max(0,(Price_live_bod*(bod_before_culling/Age_culling_bod - Subsistence_bod)))            
+            Income_fiber = bog_before_culling*Fiber_income_bog + bod_before_culling*Fiber_income_bod
+            Income_sale = bog_sale*Price_live_bog + bod_sale*Price_live_bod
+            Total_income = Income_culling + Income_fiber + Income_skin_bog + Income_hide_bod + Income_sale - Mean_herding_costs
+            
+            Income_culling_history.append(Income_culling)
+            Income_fiber_history.append(Income_fiber)
+            Income_sale_history.append(Income_sale)
+            Income_skin_hide_history.append(Income_skin_bog + Income_hide_bod)
+            
+            if Analysis_type ==1:
+                print('Total income =',Total_income)
+            #else:
+                #Only_viable_trajectories_matrix[8,t,i]=Total_income
+                
+            bog_next = bog_after_culling_and_subsistence - bog_sale
+            bod_next = bod_after_culling_and_subsistence - bod_sale
+            ub_next = dynamique_biomasses(UB[-1],Bog[-1],Bod[-1],PE_this_year)
+            
+            final_UB_unadjusted = max(0,min(Max_UB,ub_next))    #before final_UB_unadjusted        
+            final_bog_unadjusted = max(0,min(Max_bog,bog_next)) #before final_bog_unadjusted       
+            final_bod_unadjusted = max(0,min(Max_bod,bod_next)) #before final_bod_unadjusted                         
+            
+            if Analysis_type ==1:
+                print('Final UB unadjusted=',round(final_UB_unadjusted))
+                print('Final bog unadjusted=',round(final_bog_unadjusted))
+                print('Final bod unadjusted=',round(final_bod_unadjusted))
+            
+            #This block of line was used to adjust numbers to the kernel grid
+            final_UB=  round(ub_next,2) #UB_interval*(int(round((ub_next-Min_UB)/UB_interval)))+Min_UB #ub_next #min(Max_UB,UB_interval*(int(round((final_UB_unadjusted-Min_UB)/UB_interval)))+Min_UB)
+            final_bog= round(bog_next,2) #Bog_interval*(int(round((bog_next-Min_bog)/Bog_interval)))+Min_bog #bog_next #min(Max_bog,Bog_interval*(int(round((final_bog_unadjusted-Min_bog)/Bog_interval)))+Min_bog)
+            final_bod= round(bod_next,2) #Bod_interval*(int(round((bod_next-Min_bod)/Bod_interval)))+Min_bod #bod_next #min(Max_bod,Bod_interval*(int(round((final_bod_unadjusted-Min_bod)/Bod_interval)))+Min_bod)
+
+            if Analysis_type ==1:
+                print('Final UB=',final_UB)
+                print('Final bog=',final_bog)
+                print('Final bod=',final_bod)
+                print('')
+            
+            if bog_before_culling >= Subsistence_bog and bod_before_culling >= Subsistence_bod:
+                Global_subsistence_consumption_performance += 1
+                Subsistence_performance_history.append(1)
+                if Analysis_type == 1:
+                    print('subsistence constraint respected')
+            else:
+                Subsistence_performance_history.append(0)
+                if Analysis_type == 1:
+                    print('subsistence constraint violated')
+               
+            if (bog_before_culling*Mean_bog_milk_production + bod_before_culling*Mean_bod_milk_production) >= Per_capita_milk_consumption*NB_family_members:
+                Global_milk_subsistence_consumption_performance += 1
+                Milk_subsistence_performance_history.append(1)
+                if Analysis_type == 1:
+                    print('Milk subsistence constraint respected')
+            else:
+                Milk_subsistence_performance_history.append(0)
+                if Analysis_type == 1:
+                    print('Milk subsistence constraint violated')
+                
+            if bod_before_culling >= Riding_and_draught_bod and final_bod >= Riding_and_draught_bod:
+                Global_riding_draught_bod_availability_performance += 1
+                Draught_riding_bod_performance_history.append(1)
+                if Analysis_type == 1:
+                    print('Draught riding constraint respected')
+            else:
+                Draught_riding_bod_performance_history.append(0)
+                if Analysis_type == 1:
+                    print('Draught riding constraint violated')
+            
+            if Total_income >= Cash_need:
+                Global_financial_performance += 1
+                Income_performance_history.append(1)
+                if Analysis_type == 1:
+                    print('financial constraint respected')
+            else:
+                Income_performance_history.append(0)
+                if Analysis_type == 1:
+                    print('financial constraint violated')
+                    print('')
+                    print('Ratio Income / cash need =', Total_income/Cash_need)
+                    print('Income - cash need =', Total_income - Cash_need)
+                    
+            if t< Horizon-1:  
+                #check_viability=viability_of_the_state_control_combination(t,next_state,USE_Factor)
+                if bog_before_culling >= Subsistence_bog and bod_before_culling >= Subsistence_bod \
+                   and bog_before_culling*Mean_bog_milk_production + bod_before_culling*Mean_bod_milk_production >= Per_capita_milk_consumption*NB_family_members \
+                   and bod_before_culling >= Riding_and_draught_bod \
+                   and Total_income >= Cash_need:# and USE_Factor <= 1:
+                       check_viability =1
+                else:
+                    check_viability =0
+                if Analysis_type == 1:
+                    print('viability from viability function=',check_viability)
+                
+                    
+            else:
+                if (next_state[6]>=next_state[8] and next_state[7]>=next_state[9] #No more sale than livetock available
+                        and next_state[4]>= Subsistence_bog and next_state[5]>= Subsistence_bod #Meat subsistence during horizon year
+                        and next_state[5]>=Riding_and_draught_bod
+                        and (next_state[4]*Mean_bog_milk_production+next_state[5]*Mean_bod_milk_production) >= Per_capita_milk_consumption*NB_family_members
+                        and next_state[0] > Per_capita_poverty*NB_family_members): #and USE_Factor <= 1): #income constraint on horizon year                     
+                        check_viability=1
+                else:
+                    check_viability=0
+                
+                if Analysis_type ==1:
+                    print('viability from the set of constraints', check_viability)
+
+            Viability_years_count += check_viability
+            #print'viability from constraints indices=', check_viability
+            
+            overall_sheep_unit_temp=Sheep_units_bog*final_bog+Sheep_units_bod*final_bod
+
+            Overall_sheep_unit.append(overall_sheep_unit_temp)
+            Income_history.append(round(Total_income))
+            Ratio_income_need_history.append(round((Total_income/Cash_need),2) )           
+            Available_bog_for_subsistence_consumption.append(bog_before_culling) 
+            Available_bod_for_subsistence_consumption.append(bod_before_culling)
+            UB.append(final_UB)            
+            Bog.append(final_bog)
+            Bod.append(final_bod)
+            Herd_SFU.append(round(Sheep_units_bog*final_bog+Sheep_units_bod*final_bod))
+            Cash_need_line.append(Cash_need)                    
+            Bog_need_line.append(Subsistence_bog) #list used to plot the bog need
+            Bod_need_line.append(Subsistence_bod) #list used to plot the bod need          
+            VectPe.append(PE_this_year)
+            VectHazard.append(HAZARD)
+            VectUse_factor.append(USE_Factor)
+            Bog_Sale.append(bog_sale)
+            Bod_Sale.append(bod_sale)
+            Global_constraint_respect_history.append(check_viability)
+            if Analysis_type == 1:
+                print('')
+                print('UB change:', UB)
+                print('Bog change:', Bog)
+                print('Bod change:', Bod)
+                print('')
+    
+            if IDZUD<Seuil_dzud:
+                VectDzud.append(0.0)
+                VectLittleDzud.append(0.0)
+                if Analysis_type == 1:
+                    print('')
+                    print('No dzud')
+            else:    
+                VectDzud.append(1000)
+                VectLittleDzud.append(8.0)
+                NB_dzud+=1
+                if Analysis_type == 1:
+                    print('')
+                    print('Dzud')
+                    print('')
+                #elif Analysis_type == 3:
+                    #Only_viable_trajectories_matrix[9,t,i]=1
+                    #print( 'Iterations NB;',i+1,';herder type=;',Herder_type,';herder size=;',Herder_size,';initial bog;',Initial_Bog,';initial bod;',Initial_Bod,';year;',t+1,';bog before dzud;',Bog[-2],';bod before dzud;',Bod[-2],';bog after spring births and before culling=;', bog_before_culling,';bod after spring births and before culling=;', bod_before_culling,';bog after subsistence and culling=;', bog_after_culling_and_subsistence,';bod after subsistence and culling=;', bod_after_culling_and_subsistence,';bog sale =;',bog_sale,';bod sale =;',bod_sale,';final bog =;',Bog[-1],';final bod =;',Bod[-1])
+
+        Window_financial_performance += income_window_performance(Income_history,buffer_income_window_size,Cash_need)
+        Income_constraint_violation += bad_times_count(Income_performance_history,hard_times_window_size)     
+        Subsistence_constraint_violation += bad_times_count(Subsistence_performance_history,hard_times_window_size)
+        Mean_bog += numpy.mean(Bog)
+        Mean_bod += numpy.mean(Bod)
+        Mean_herd_SFU += numpy.mean(Herd_SFU)
+        Mean_UB += numpy.mean(UB)
+        Max_bog_traj += numpy.amax(Bog)
+        Max_bod_traj += numpy.amax(Bod)
+        Max_herd_SFU += numpy.amax(Herd_SFU)
+        Final_bog += int(final_bog_unadjusted)
+        Final_bod += int(final_bod_unadjusted)
+        Final_UB += int(final_UB_unadjusted)
+        Final_viability +=Global_constraint_respect_history[-1]
+
+        Count_Female_bog_fecundity += numpy.mean(Female_bog_fecundity)
+        Count_Female_bod_fecundity += numpy.mean(Female_bod_fecundity)
+        Count_Income_culling_history += numpy.mean(Income_culling_history)
+        Count_Income_fiber_history += numpy.mean(Income_fiber_history)
+        Count_Income_sale_history += numpy.mean(Income_sale_history)
+        Count_Income_skin_hide_history += numpy.mean(Income_skin_hide_history)
+        Count_Number_of_viable_or_resilient_control_pairs += numpy.mean(Number_of_viable_or_resilient_control_pairs)
+
+                
+        Income += sum(Income_history)
+        #print('Iterations NB:,',i+1,',Herder type:,',Herder_type,'Herder size:',Herder_size,',initial bog,',Initial_Bog,',initial bod,',Initial_Bod,',Global contraint respect dynamics,',Global_constraint_respect_history,',UB dynamics:,',UB,',Bog:,',Bog,',Bod:,',Bod,',Female bog fecundity:,',Female_bog_fecundity,',Female bod fecundity:,',Female_bod_fecundity,',Bog sale:,',Bog_Sale,',Bod sale:,',Bod_Sale,',Culling income,',Income_culling_history,',Fiber income,',Income_fiber_history,',Sale income,',Income_sale_history,',Sale skin/hide,',Income_skin_hide_history,',Dzud occurence:,', VectDzud,',Number of viable control pairs,',Number_of_viable_or_resilient_control_pairs)
+        if replicate ==1:
+            print('Iterations NB:,',i+1,',initial bog,',Initial_Bog,',initial bod,',Initial_Bod,',Global contraint respect dynamics,',Global_constraint_respect_history,',UB dynamics:,',UB,',Herd SFU:,',Herd_SFU,',Bog:,',Bog,',Bod:,',Bod,',Female bog fecundity:,',Female_bog_fecundity,',Female bod fecundity:,',Female_bod_fecundity,',Bog sale:,',Bog_Sale,',Bod sale:,',Bod_Sale,',Ratio income,',Ratio_income_need_history,',Dzud occurence:,', VectDzud,',Number of viable control pairs,',Number_of_viable_or_resilient_control_pairs)        
+    
+    if replicate ==1:
+        print("After", Horizon, "years, there are",  Final_bog/iterations, "bog and" , Final_bod/iterations, "bod.")
+        print("Final undergound biomass was in average:",Final_UB/iterations, "kg/ha.")
+        print("Mean bog was ", round(Mean_bog/iterations,0)," heads i.e. ", Sheep_units_bog*round(Mean_bog/iterations,0), "SFU, mean bod was", round(Mean_bod/iterations,0)," heads, mean herd was",round(Mean_herd_SFU/iterations,2),"SFU and mean UB was", round(Mean_UB/iterations,0), "kg/ha)" )
+        print("Max bog was ", round(Max_bog_traj/iterations,0)," heads, max bod was", round(Max_bod_traj/iterations,2)," heads and max herd was", round(Max_herd_SFU/iterations,2)," SFU " )
+    
+        print("Percentage of years where meat provision was sufficient =", 100*Global_subsistence_consumption_performance/(Horizon*iterations),"%")
+        print("Percentage of years where milk provision was sufficient =",100*Global_milk_subsistence_consumption_performance/(Horizon*iterations),"%")
+        print("Percentage of years with enough bod for draught and riding =", 100*Global_riding_draught_bod_availability_performance/(Horizon*iterations),"%"  )  
+        print("Percentage of years where income was sufficient =", 100*Global_financial_performance/(Horizon*iterations),"%")
+        #print("Number of windows of", buffer_income_window_size, "years with sufficient income:",Window_financial_performance/iterations,"%"   ) 
+        #print("Number of times income was insufficient over", hard_times_window_size,"solid years:", Income_constraint_violation/iterations  )   
+        #print("Number of times subsistence was insufficient over", hard_times_window_size,"solid years", Subsistence_constraint_violation/iterations   ) 
+        print("Mean yearly income generated over iterations:",Income/(Horizon*iterations),"while needs are",Cash_need    )
+        print("Ratio income generated / income needs over",Horizon,"years=",Income/(Horizon*iterations*Cash_need))
+        print("number of Dzuds:", NB_dzud/iterations)
+        print("There were", Viability_years_count/iterations,"viable years")
+        print("There were", Final_viability/iterations,"Viable years on horizon")
+        print(" ")
+        print("Mean bog fecundity is", round(Count_Female_bog_fecundity/iterations,2))
+        print("Mean bod fecundity is", round(Count_Female_bod_fecundity/iterations,2))
+        print("")
+        print("Mean yearly animal income is ",round((Count_Income_culling_history+Count_Income_sale_history)/(1000000*iterations),2), "MMNT e.g.", 100*round((Horizon*Count_Income_culling_history+Horizon*Count_Income_sale_history)/(Income+Mean_herding_costs*Horizon*iterations),2), "% of total income")
+        print("Mean yearly fiber income is ",round(Count_Income_fiber_history/(1000000*iterations),2), "MMNT e.g.", 100*round(Horizon*Count_Income_fiber_history/(Income+Mean_herding_costs*Horizon*iterations),2), "% of total income")
+        print("Mean yearly skin hide income is ",round(Count_Income_skin_hide_history/(1000000*iterations),2), "MMNT e.g.", 100*round(Horizon*Count_Income_skin_hide_history/(Income+Mean_herding_costs*Horizon*iterations),2), "% of total income")
+        print("")
+        print("Mean viable or resilient control proportion", round((Count_Number_of_viable_or_resilient_control_pairs/(iterations*(Discretization_bog_sale+1)*(Discretization_bod_sale+1))),3))
+
+    elif replicate >1:
+        print("For MAX_SFU of;",Max_SFU,";i.e. bog nb=",round(Max_bog_loop),"and bod nb =",round(Max_bod_loop),"Final viability is %;",round(100*Final_viability/iterations,2),"; and mean ratio income/need is : ;",round(Income/(Horizon*iterations*Cash_need),2))
+        Income = 0
+    
+    if Analysis_type ==1:
+        plt.figure(1)
+        plt.title('Underground Biomass')
+        plt.plot(UB,color='green')
+        plt.xlabel('year')
+        plt.grid(True)
+
+        plt.figure(2)
+        plt.title('Livestock numbers')
+        plt.plot(Bog, color='green')
+        plt.plot(Bod, color='blue')
+        plt.plot(Overall_sheep_unit, color='magenta')
+        plt.plot(VectDzud,color='red')
+        plt.grid(True)
+
+        plt.figure(3)
+        plt.title('Financial Performance')
+        plt.plot(Income_history, color='green')
+        plt.plot(Cash_need_line, color='red', linestyle='--')
+        plt.grid(True)
+ 
+        plt.figure(4)
+        plt.title('Weather, hazard, use factor and dzuds')
+        plt.plot(VectPe,color='blue')
+        plt.plot(VectHazard,color='black')
+        plt.plot(VectUse_factor,color='magenta')
+        plt.plot(VectLittleDzud,color='red')
+        plt.grid(True)
+
+        plt.figure(5)
+        plt.title('Bog and Bod provision performance (bog: blue / bod: magenta)')
+        plt.plot(Available_bog_for_subsistence_consumption, color='blue')
+        plt.plot(Bog_need_line, color='blue', linestyle='--')
+        plt.plot(Available_bod_for_subsistence_consumption, color='magenta')
+        plt.plot(Bod_need_line, color='magenta', linestyle='--')
+        plt.grid(True)
+
+        plt.figure(6)
+        plt.title('Controls (%bog sale: blue / %bod_sale: red)')
+        plt.plot(Bog_Sale,color='blue')
+        plt.plot(Bod_Sale,color='red')
+        plt.plot(Number_of_viable_or_resilient_control_pairs,color='magenta')
+        plt.grid(True)
+
+        plt.show()
