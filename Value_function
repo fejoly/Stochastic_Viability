@@ -8,32 +8,36 @@ import os
 os.chdir(r'C:\Users\fejoly\Documents\travail_sauvegarde\Publications\Herder rationality\Matrix')
 plt.close('all')
 
-Initial_UB=500 #used to slice the matrix in the end
+Initial_UB=500 #used to slice the global kernel in the end
 
 ########################################
 #   Which viability kernel to build?   #
 ########################################
-discr_coeff=1 # 
-Comment = 'db_GitHub'
-Coef_poverty_line=2
+discr_coeff=1 # coeff discr to set to 1 for detailed results, <1 to accelerate
+Comment = ''
+Coef_poverty_line=1
 Threshold_bog_horizon=0
 Threshold_bod_horizon=0
 Threshold_biomass_horizon=0
+Max_possible_buy_bog=100
+Max_possible_buy_bod=20
 Horizon=20
+Capture_basin_horizon=Horizon
+confidence_level=1
 Year_of_viability_kernel_extraction=0#index
-file_name_save_viable_space_matrix = 'Value_function_all_t_on_' + str(Horizon) + 'years_Pov_X' + str(Coef_poverty_line) + '_Target_' + str(Threshold_bog_horizon) + '_bog_' + str(Threshold_bod_horizon) + '_bod_'+ str(Threshold_biomass_horizon) + '_kgha_'  + Comment
-file_name_save_viable_space_matrix_t0 = 'Value_function_t0_on_' + str(Horizon) + 'years_Pov_X' + str(Coef_poverty_line) + '_Target_' + str(Threshold_bog_horizon) + '_bog_' + str(Threshold_bod_horizon) + '_bod_'+ str(Threshold_biomass_horizon) + '_kgha_'  + Comment
+file_name_save_viable_space_matrix_t0 =       'Value_function_t0_on_' + str(Horizon) + 'years_Pov_X' + str(Coef_poverty_line) + '_with_' + str(Max_possible_buy_bog) + '_max_bog_bought_sold_'+ str(Max_possible_buy_bod) + '_max_bod_bought_sold_at_conf_level_' + str(confidence_level) + '_with_discretX'+ str(discr_coeff) + '_' + str(Comment)
+#file_name_save_resilience_basin_matrix_t0 = 'Resilience_basin_t0_on_' + str(Horizon) + 'years_Pov_X' + str(Coef_poverty_line) + '_with_' + str(Max_possible_buy_bog) + '_max_bog_bought_sold_'+ str(Max_possible_buy_bod) + '_max_bod_bought_sold_at_conf_level_' + str(confidence_level) + '_with_discretX'+ str(discr_coeff) + '_' + str(Comment)
 
 #Paramètres liés aux parcours
 otor_forage = 160000. #8000000 divisé par 50
 Surf_zone_ete=1800.
 
 #Paramètres du modèle de biomasse:
-rue=0.0045 
-storage=0.73581 
-mortality=0.05785 
-Conso_sheep_unit=207.7 
-densdep=0.00112 
+rue=0.0045 #Rain use efficiency
+storage=0.73581 #Taux de mise en réserve des racines
+mortality=0.05785 #Facteur de mortalité des racines
+Conso_sheep_unit=207.7 #Consommation par sheep unit pendant les 5 mois passés sur la zone d'été (1 day = 1.385 kg of dry matter during 150 days - moyenne de 1 et 1.77)
+densdep=0.00112 #Paramètre de densité dépendance de la mortalité de biomasse souterraine et de mise en réserve
 
 #Paramètres des sous-modèles démographiques animaux    
 Perc_female_bog=0.533 #parameter to be entered
@@ -94,6 +98,7 @@ Hazard=[ 0.7,  0.7,  3.5,  0.7,  0.7,  3.5,  0.7,  0.7,  3.5,  0.7,  0.7,  3.5, 
 Pest  =[ 91.0, 91.0, 91.0, 91.0, 36.4, 91.0, 91.0, 91.0, 91.0, 36.4, 91.0, 91.0, 91.0, 91.0, 36.4, 91.0, 91.0, 91.0, 91.0, 36.4, 91.0, 91.0, 91.0, 91.0, 36.4] #Established by observing that on the last 22 year time serie we had 4 years with a hazard equal to that of a dzud (about one year out of 5)
 Stoch_yrs=[[0.7,91.0,float(8)/15],[3.5,91.0,float(4)/15],[0.7,36.4,float(2)/15],[3.5,36.4,float(1)/15]] #re-calculated with proportions on 22 years
 
+
 #Discretization
 Max_UB=700.
 Min_UB=100.
@@ -109,19 +114,21 @@ Discretization_bod=int(90*discr_coeff) #the mean variation is 6bod/year so the d
 Bog_interval=(Max_bog-Min_bog)/Discretization_bog
 Bod_interval=(Max_bod-Min_bod)/Discretization_bod
 
-Max_bog_sale=100.
-Min_bog_sale=-100.
-Max_bod_sale=20.
-Min_bod_sale=-20.
+Max_bog_sale=Max_possible_buy_bog
+Min_bog_sale=-Max_possible_buy_bog
+Max_bod_sale=Max_possible_buy_bod
+Min_bod_sale=-Max_possible_buy_bod
 Discretization_bog_sale=int(10*discr_coeff)
-Discretization_bod_sale=int(10*discr_coeff)
+Discretization_bod_sale=int(8*discr_coeff)
 Bog_sale_interval=(Max_bog_sale-Min_bog_sale)/Discretization_bog_sale
 Bod_sale_interval=(Max_bod_sale-Min_bod_sale)/Discretization_bod_sale
 
 #Generation of Trajectories_space and Capture_basin matrix
 Viable_trajectories_space=numpy.zeros((Horizon,Discretization_UB+1,Discretization_bog+1,Discretization_bod+1,Discretization_bog_sale+1,Discretization_bod_sale+1)) #Matrix used to store all the viable trajectories and extract in the end the viability kernel
 Viability_kernel=numpy.zeros((Discretization_UB+1,Discretization_bog+1,Discretization_bod+1,Discretization_bog_sale+1,Discretization_bod_sale+1)) #Matrix used to store all the viable trajectories and extract in the end the viability kernel
-
+#Resilient_trajectories_space=numpy.zeros((Capture_basin_horizon,Discretization_UB+1,Discretization_bog+1,Discretization_bod+1,Discretization_bog_sale+1,Discretization_bod_sale+1)) #Matrix used to store all the trajectories leading to the viability kernel at the 'Capture_basin_horizon' time and to extract the capture basin 
+#Resilient_trajectories_space.fill(Capture_basin_horizon) #We need to put a high default value because later in the loops we will need to pick up the minimum numbers of years to come back to a viable state so we must avoid zeros, but not too high to have it visible in the final matrix
+#Resilience_basin=numpy.zeros((Discretization_UB+1,Discretization_bog+1,Discretization_bod+1,Discretization_bog_sale+1,Discretization_bod_sale+1)) #Matrix used to store the resilience basin 
 
 ######################################################
 #         Definition of dynamics functions           #
@@ -284,6 +291,9 @@ for i in reversed(Time_serie):
                                 next_state=dynamic_of_state_control_combination(j*UB_interval+Min_UB,k*Bog_interval+Min_bog,l*Bod_interval+Min_bod,m*Bog_sale_interval+Min_bog_sale,n*Bod_sale_interval+Min_bod_sale,Pest,idzud,use_factor)                            
                                 temp_viab+=Prop*viability_of_the_state_control_combination(i,next_state,use_factor)
                             Viable_trajectories_space[i,j,k,l,m,n]=temp_viab
+                            
+
+
 
 print(" ")
 print("The matrices have been computed")
@@ -294,12 +304,12 @@ print(" ")
 ############################################################
 Viability_kernel=numpy.take(Viable_trajectories_space,0,axis=0)
 
+
 #############################################
 #            Save matrix files              #
 #############################################
 print("Saving matrices")
 print(" ")
-Save_Pick(Viable_trajectories_space,file_name_save_viable_space_matrix)
 Save_Pick(Viability_kernel,file_name_save_viable_space_matrix_t0)
  
 #################################################
@@ -308,21 +318,21 @@ Save_Pick(Viability_kernel,file_name_save_viable_space_matrix_t0)
 print("Extraction of the value function matrix at year zero")
 print(" ")
 
-Viability_kernel=numpy.zeros((Discretization_UB+1,Discretization_bog+1,Discretization_bod+1))
+Viability_kernel_draw=numpy.zeros((Discretization_UB+1,Discretization_bog+1,Discretization_bod+1))
 for j in range(int(Discretization_UB+1)):
     for k in range(int(Discretization_bog+1)):
         for l in range(int(Discretization_bod+1)):
-            Viability_kernel[j,k,l]=numpy.max(Viable_trajectories_space[Year_of_viability_kernel_extraction,j,k,l,:,:])
+            Viability_kernel_draw[j,k,l]=numpy.max(Viability_kernel[j,k,l,:,:])
 
 
 print("value function matrix  at year zero extracted")
 print(" ")
 print("Now slicing the value function matrix  at year zero on the initial underground biomass value.")
 print(" ")
-print( Viability_kernel[int((Initial_UB-Min_UB)/UB_interval),:,:])                   
+print( Viability_kernel_draw[int((Initial_UB-Min_UB)/UB_interval),:,:])                   
 
 plt.figure(1)
-plot_1 = plt.imshow(Viability_kernel[int((Initial_UB-Min_UB)/UB_interval),:,:].T, cmap=cm.Blues, interpolation='nearest', origin='lower', extent=[Min_bog, Max_bog, Min_bod, Max_bod], aspect = (Max_bog-Min_bod)/(Max_bod-Min_bod))
+plot_1 = plt.imshow(Viability_kernel_draw[int((Initial_UB-Min_UB)/UB_interval),:,:].T, cmap=cm.Blues, interpolation='nearest', origin='lower', extent=[Min_bog, Max_bog, Min_bod, Max_bod], aspect = (Max_bog-Min_bod)/(Max_bod-Min_bod))
 plt.xlabel('Bog number')
 plt.ylabel('Bod number')
 plt.title('value function matrix with probability of constraint respect')
