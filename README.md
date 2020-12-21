@@ -1,5 +1,5 @@
 The script ‘Value_function ‘ computes the V(x) value function according to x.
-It saves it in a file located in a repertory that must be defined in line 8.
+It saves these values in a Matrix in a file located in a repertory that must be defined at line 8.
 The level of income aimed must also be entered line 18.
 
 The script ‘Stochastic_viability_trajectories’ builds viable trajectories based on V(x) computed by the above script.
